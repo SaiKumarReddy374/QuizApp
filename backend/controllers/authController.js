@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js'; // Note the `.js` extension is required
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export const login = async (req, res) => {
   const { email, password } = req.body;
@@ -25,7 +28,7 @@ export const login = async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
+      secure:process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000,
     });
