@@ -2,15 +2,12 @@
   "name": "my-quiz-app",
   "version": "1.0.0",
   "description": "",
-  "main": "backend/server.js",
+  "main": "index.js",
   "scripts": {
-    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
-    "start": "npm run start --prefix backend"
+    "build":"npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "start":"npm run start --prefix backend"
   },
-  "keywords": ["quiz", "express", "react", "vite", "mongodb"],
-  "author": "Sai Kumar Reddy",
-  "license": "ISC",
-  "engines": {
-    "node": ">=18"
-  }
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
