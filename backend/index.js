@@ -26,7 +26,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://your-frontend.onrender.com'],
+  origin: ['http://localhost:5173', 'https://quizapp-frontend-8z3w.onrender.com/'],
   credentials: true,
 }));
 
