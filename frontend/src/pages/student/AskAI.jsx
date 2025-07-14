@@ -38,7 +38,7 @@ const StudentAskAI = () => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5000/api/student/ask-ai', {
+      const res = await axios.post('https://quizapp-frontend-8z3w.onrender.com/api/student/ask-ai', {
         question: inputValue
       });
 
