@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import StudentLayout from '../../components/StudentLayout';
 import { Send, Bot, User, Lightbulb } from 'lucide-react';
-import axios from 'axios';
+import axios from '../../api/axios'; // ✅ Custom axios instance
 
 const StudentAskAI = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'ai',
-      content: "Hello! I'm your AI tutor. I'm here to help you with any questions about your studies. What would you like to know?",
+      content:
+        "Hello! I'm your AI tutor. I'm here to help you with any questions about your studies. What would you like to know?",
       timestamp: new Date().toLocaleTimeString()
     }
   ]);
@@ -16,11 +17,11 @@ const StudentAskAI = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const suggestedQuestions = [
-    "Explain the quadratic formula",
-    "What are the laws of motion?",
-    "How do acids and bases react?",
-    "What is photosynthesis?",
-    "Explain the Pythagorean theorem"
+    'Explain the quadratic formula',
+    'What are the laws of motion?',
+    'How do acids and bases react?',
+    'What is photosynthesis?',
+    'Explain the Pythagorean theorem'
   ];
 
   const handleSend = async () => {
@@ -33,12 +34,12 @@ const StudentAskAI = () => {
       timestamp: new Date().toLocaleTimeString()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5000/api/student/ask-ai', {
+      const res = await axios.post('/student/ask-ai', {
         question: inputValue
       });
 
@@ -49,10 +50,10 @@ const StudentAskAI = () => {
         timestamp: new Date().toLocaleTimeString()
       };
 
-      setMessages(prev => [...prev, aiResponse]);
+      setMessages((prev) => [...prev, aiResponse]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 2,
@@ -100,9 +101,7 @@ const StudentAskAI = () => {
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    message.type === 'user' 
-                      ? 'bg-teal-600 ml-3' 
-                      : 'bg-blue-600 mr-3'
+                    message.type === 'user' ? 'bg-teal-600 ml-3' : 'bg-blue-600 mr-3'
                   }`}
                 >
                   {message.type === 'user' ? (
@@ -140,8 +139,14 @@ const StudentAskAI = () => {
                 <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
                   <div className="flex space-x-2">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    ></div>
                   </div>
                 </div>
               </div>
