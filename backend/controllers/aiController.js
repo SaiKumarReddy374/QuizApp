@@ -39,8 +39,16 @@ export const askAI = async (req, res) => {
     );
 
     // The response structure is also different
-    const answer = response.data.candidates[0].content.parts[0].text;
-    res.json({ answer });
+    const candidates = response.data?.candidates;
+const answer = candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+if (!answer) {
+  return res.json({ answer: "Sorry, I couldn't generate a response. Please try again." });
+}
+
+res.json({ answer });
+console.log(answer);
+
   } catch (error) {
     console.error("Google AI API error:", error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch AI response' });
