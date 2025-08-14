@@ -12,6 +12,8 @@ import teacherRouter from './routes/teacherRoutes.js';
 
 import { askAI } from './controllers/aiController.js';
 
+import { swaggerUi, swaggerSpec } from './swagger/swagger.js'; // ✅ Import Swagger
+
 dotenv.config();
 
 const __dirname=path.resolve();
@@ -29,6 +31,10 @@ app.use(cors({
   origin: ['http://localhost:5173', 'https://quizapp-frontend-8z3w.onrender.com'],
   credentials: true,
 }));
+
+// ✅ Swagger UI route
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 
 
 app.post('/api/student/ask-ai', askAI);

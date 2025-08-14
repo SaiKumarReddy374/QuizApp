@@ -25,6 +25,8 @@
     "my-quiz-app": "file:..",
     "nodemon": "^3.1.10",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

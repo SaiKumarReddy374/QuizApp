@@ -226,3 +226,5 @@ export const getTeacherQuizzes = async (req, res) => {
     res.status(500).json({ error: 'Failed to load quizzes' });
   }
 };
+
+
