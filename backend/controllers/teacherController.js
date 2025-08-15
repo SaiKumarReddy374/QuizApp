@@ -3,11 +3,23 @@ import Batch from '../models/Batch.js';
 import Result from '../models/Result.js';
 import User from '../models/User.js';
 
+import client from '../redisClient.js';
+
 
 export const getLeaderboard = async (req, res) => {
   try {
     const teacherId = req.user.userId;
     const { batchId, quizId } = req.query;
+
+    // Generate a unique cache key for this leaderboard view
+    const cacheKey = `leaderboard:${teacherId}:${batchId || 'all'}:${quizId || 'all'}`;
+
+    // Check Redis first
+    const cachedData = await client.get(cacheKey);
+    if (cachedData) {
+      console.log(`Serving leaderboard from cache: ${cacheKey}`);
+      return res.json(JSON.parse(cachedData));
+    }
 
     // Validate filter params
     if (batchId) {
@@ -23,8 +35,11 @@ export const getLeaderboard = async (req, res) => {
 
     const quizzes = await Quiz.find(quizzesQuery).select('_id title');
 
-    if (quizzes.length === 0)
-      return res.json({ leaderboard: [], quizOptions: [], batchOptions: [] });
+    if (quizzes.length === 0) {
+      const emptyResponse = { leaderboard: [], quizOptions: [], batchOptions: [] };
+      await client.setEx(cacheKey, 300, JSON.stringify(emptyResponse)); // cache empty for 5 mins
+      return res.json(emptyResponse);
+    }
 
     const quizIds = quizzes.map(q => q._id);
     const results = await Result.find({ quiz: { $in: quizIds } })
@@ -40,16 +55,23 @@ export const getLeaderboard = async (req, res) => {
       submittedAt: r.completedAt
     }));
 
-    res.json({
+    const responseData = {
       leaderboard,
       batchOptions: batchId ? [] : await Batch.find({ teacher: teacherId }).select('id name'),
       quizOptions: quizzes.map(q => ({ id: q._id, title: q.title }))
-    });
+    };
+
+    // Cache for 5 minutes
+    await client.setEx(cacheKey, 300, JSON.stringify(responseData));
+    console.log(`Leaderboard cached: ${cacheKey}`);
+
+    res.json(responseData);
   } catch (err) {
     console.error('Error fetching leaderboard:', err);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 };
+
 
 export const getTeacherProfile = async (req, res) => {
   try {
@@ -165,6 +187,14 @@ export const createQuiz = async (req, res) => {
       duration,
     });
 
+    // Invalidate teacher quiz cache
+    const cacheKey = `teacherQuizzes:${req.user.userId}`;
+    await client.del(cacheKey);
+    console.log(`Redis cache cleared for ${cacheKey}`);
+    // //Invalidate Redis cache for active quizzes of this batch
+    // await client.del(`activeQuizzes:${batchId}`);
+    // console.log(`Redis cache for activeQuizzes:${batchId} invalidated`);
+
     res.status(201).json(quiz);
   } catch (err) {
     console.error('Create quiz error:', err.message);
@@ -191,6 +221,10 @@ export const createBatch = async (req, res) => {
       students,
     });
 
+    //Invalidate cached batches
+    await client.del('allBatches');
+    console.log('Redis cache for allBatches invalidated');
+
     res.status(201).json({ message: 'Batch created', batch: newBatch });
   } catch (error) {
     console.error('Batch creation error:', error.message);
@@ -214,17 +248,35 @@ export const listTeacherBatches = async (req, res) => {
 // GET /api/teacher/quizzes
 export const getTeacherQuizzes = async (req, res) => {
   try {
+    console.time('getTeacherQuizzes'); // start timer
     const teacherId = req.user.userId;
-    
-    const quizzes = await Quiz.find({ createdBy: teacherId })
-      .populate('batch', 'name') // ✅ populate batch name
-      .sort({ createdAt: -1 });  // optional: show latest first
+    const cacheKey = `teacherQuizzes:${teacherId}`;
 
+    // Check cache first
+    const cachedQuizzes = await client.get(cacheKey);
+    if (cachedQuizzes) {
+      console.timeEnd('getTeacherQuizzes');
+      console.log('Served from Redis cache');
+      return res.json({ quizzes: JSON.parse(cachedQuizzes) });
+    }
+
+    //  Fetch from MongoDB if not cached
+    const quizzes = await Quiz.find({ createdBy: teacherId })
+      .populate('batch', 'name')
+      .sort({ createdAt: -1 });
+
+    //  Cache for 10 minutes
+    await client.setEx(cacheKey, 600, JSON.stringify(quizzes));
+
+    console.timeEnd('getTeacherQuizzes');
+    console.log('Served from MongoDB');
     res.json({ quizzes });
+
   } catch (err) {
     console.error('Error fetching quizzes:', err);
     res.status(500).json({ error: 'Failed to load quizzes' });
   }
 };
+
 
 

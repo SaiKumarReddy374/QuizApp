@@ -28,7 +28,7 @@ studentRouter.get('/batches', verifyToken, requireRole('student'), getAllBatches
 studentRouter.post('/join-batch', verifyToken, requireRole('student'), joinBatch);
 studentRouter.get('/quiz/:quizId', verifyToken, getStudentQuizById);
 
-studentRouter.get('/stats', verifyToken, requireRole('student'), getStudentStats);
+// studentRouter.get('/stats', verifyToken, requireRole('student'), getStudentStats);
 
 // ✅ This is the one your frontend is calling:
 studentRouter.get('/batch/:batchId/quizzes', verifyToken, requireRole('student'), getQuizzesByBatch);
