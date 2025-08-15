@@ -88,10 +88,17 @@ export const submitQuiz = async (req, res) => {
     const cacheKey = `studentResults:${studentId}`;
     await client.del(cacheKey);
 
-    // Invalidate the cached active quizzes for this student
-    const QuizecacheKey = `activeQuizzes:${studentId}`;
-    await client.del(QuizecacheKey);
-    console.log(`Redis cache invalidated for student ${studentId}`);
+    // // Invalidate the cached active quizzes for this student
+    // const QuizecacheKey = `activeQuizzes:${studentId}`;
+    // await client.del(QuizecacheKey);
+    // console.log(`Redis cache invalidated for student ${studentId}`);
+
+    // const quiz = await Quiz.findById(quizId);
+    if (quiz) {
+      const cacheKey = `student:${studentId}:batch:${quiz.batch}:quizzes`;
+      await client.del(cacheKey); // Delete the cached quizzes for this batch
+      console.log(`Redis cache cleared for student ${studentId}, batch ${quiz.batch}`);
+    }
 
     const teacherId = quiz.createdBy._id;
     await client.del(`leaderboard:${teacherId}:*`);
@@ -234,57 +241,42 @@ export const getStudentProfile = async (req, res) => {
   }
 };
 
-// GET /api/student/quizzes
 
-export const getStudentQuizzes = async (req, res) => {
+
+export const getActiveQuizzesForStudent = async (req, res) => {
   try {
-    const student = await User.findById(req.user.id);
+    const studentId = req.user.userId;
 
-    if (!student || !student.batch) {
-      return res.status(404).json({ message: 'Student batch not found' });
+    const student = await User.findById(studentId).populate('batches');
+    if (!student || !student.batches || student.batches.length === 0) {
+      return res.status(404).json({ message: 'No batches found' });
     }
 
+    const batchIds = student.batches.map(batch => batch._id);
     const now = new Date();
 
-    const quizzes = await Quiz.find({ batch: student.batch }).lean();
+    // Get all upcoming quizzes
+    const activeQuizzes = await Quiz.find({
+      batch: { $in: batchIds },
+      deadline: { $gte: now }
+    }).lean();
 
-    // You may need to check Result collection if quiz doesn't store student submission
-    const results = await Result.find({ student: student._id }).select('quiz').lean();
-    const completedQuizIds = new Set(results.map(r => r.quiz.toString()));
+    // Get completed quiz IDs
+    const completedResults = await Result.find({ student: studentId }).select('quiz');
+    const completedQuizIds = completedResults.map(r => r.quiz.toString());
 
-    const enriched = quizzes.map((quiz) => {
-      const deadline = new Date(quiz.deadline);
-      let status = 'available';
+    const filteredQuizzes = activeQuizzes
+      .filter(quiz => !completedQuizIds.includes(quiz._id.toString()))
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
-      if (completedQuizIds.has(quiz._id.toString())) {
-        status = 'completed';
-      } else if (deadline < now) {
-        status = 'overdue';
-      }
 
-      return {
-        ...quiz,
-        status,
-        deadline,
-      };
-    });
+    res.json(filteredQuizzes);
 
-    //  Custom sort:
-    const statusPriority = { 'available': 0, 'overdue': 1, 'completed': 2 };
-
-    const sorted = enriched.sort((a, b) => {
-      const statusCompare = statusPriority[a.status] - statusPriority[b.status];
-      if (statusCompare !== 0) return statusCompare;
-      return new Date(a.deadline) - new Date(b.deadline); // earlier deadlines first
-    });
-
-    res.json(sorted);
-  } catch (error) {
-    console.error('Error in getStudentQuizzes:', error);
-    res.status(500).json({ message: 'Server error' });
+  } catch (err) {
+    console.error('Error in getActiveQuizzesForStudent:', err.message);
+    res.status(500).json({ error: 'Failed to fetch active quizzes' });
   }
 };
-
 
 
 
@@ -359,6 +351,10 @@ export const joinBatch = async (req, res) => {
     //  await client.del(`activeQuizzes:${batchId}`);
     // console.log(`Redis cache for activeQuizzes:${batchId} invalidated after student joined`);
     
+    // ✅ Clear Redis cache for this student's batch quizzes
+    const cacheKey = `student:${student._id}:batch:${batchId}:quizzes`;
+    await client.del(cacheKey);
+    console.log(`Redis cache cleared for student ${student._id} for batch ${batchId}`);
 
     console.log(`Student ${student.name} added to batch ${batch.name}`);
     res.json({ message: 'Successfully joined the batch', batch: batch.name });
@@ -369,35 +365,79 @@ export const joinBatch = async (req, res) => {
   }
 };
 
+export const leaveBatch = async (req, res) => {
+  try {
+    const studentId = req.user.userId;
+    const batchId = req.params.batchId;
+
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ message: 'Batch not found' });
+    }
+
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Remove student from batch
+    batch.students = batch.students.filter(id => id.toString() !== studentId);
+    await batch.save();
+
+    // Remove batch from student
+    student.batches = student.batches.filter(id => id.toString() !== batchId);
+    await student.save();
+
+    // await client.del(`activeQuizzes:${batchId}:${studentId}`);
+    // console.log(`Redis cache for activeQuizzes:${batchId}:${studentId} invalidated after student left`);
+
+     const cacheKey = `student:${student._id}:batch:${batchId}:quizzes`;
+    await client.del(cacheKey);
+    console.log(`Redis cache cleared for student ${student._id} for batch ${batchId} after leaving`);
+
+
+    res.json({ message: 'Successfully left the batch' });
+
+  } catch (error) {
+    console.error('Error in leaveBatch:', error);
+    res.status(500).json({ message: 'Failed to leave the batch' });
+  }
+};
+
+
+
 export const getQuizzesByBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
+    const cacheKey = `student:${req.user.userId}:batch:${batchId}:quizzes`;
+    const timerLabel = `getQuizzesByBatch-${batchId}`;
 
-    const student = await User.findById(req.user.userId); // ✅ fix: use req.user.userId
+    console.time(timerLabel); // unique per batch
+
+    // Check Redis
+    const cached = await client.get(cacheKey);
+    if (cached) {
+      console.timeEnd(timerLabel); // ends the unique timer
+      console.log(`Dashboard from Redis cache for batch ${batchId}`);
+      return res.json(JSON.parse(cached));
+    }
+
+    // Fetch from MongoDB
+    const student = await User.findById(req.user.userId);
     if (!student) return res.status(404).json({ message: 'Student not found' });
 
     const isInBatch = student.batches.some(b => b.toString() === batchId);
-    if (!isInBatch) {
-      return res.status(403).json({ message: 'You are not a member of this batch' });
-    }
+    if (!isInBatch) return res.status(403).json({ message: 'You are not a member of this batch' });
 
     const quizzes = await Quiz.find({ batch: batchId }).sort({ deadline: 1 });
     const now = new Date();
 
     const quizzesWithStatus = await Promise.all(
       quizzes.map(async (quiz) => {
-        //  Check if the student already submitted this quiz
-        const result = await Result.findOne({
-          quiz: quiz._id,
-          student: req.user.userId,
-        });
-
+        const result = await Result.findOne({ quiz: quiz._id, student: req.user.userId });
         let status = 'available';
-        if (result) {
-          status = 'completed';
-        } else if (quiz.deadline && new Date(quiz.deadline) < now) {
-          status = 'overdue';
-        }
+        if (result) status = 'completed';
+        else if (quiz.deadline && new Date(quiz.deadline) < now) status = 'overdue';
 
         return {
           _id: quiz._id,
@@ -411,12 +451,20 @@ export const getQuizzesByBatch = async (req, res) => {
       })
     );
 
+    // Save to Redis
+    await client.setEx(cacheKey, 300, JSON.stringify(quizzesWithStatus));
+
+    console.timeEnd(timerLabel); // ends the unique timer
+    console.log(`Dashboard from MongoDB for batch ${batchId}`);
+
     res.json(quizzesWithStatus);
+
   } catch (err) {
     console.error('Error fetching quizzes:', err);
     res.status(500).json({ message: 'Failed to fetch quizzes', error: err.message });
   }
 };
+
 
 
 
@@ -480,73 +528,56 @@ export const getStudentQuizCounts = async (req, res) => {
 };
 
 
-export const leaveBatch = async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-    const batchId = req.params.batchId;
-
-    const batch = await Batch.findById(batchId);
-    if (!batch) {
-      return res.status(404).json({ message: 'Batch not found' });
-    }
-
-    const student = await User.findById(studentId);
-    if (!student) {
-      return res.status(404).json({ message: 'Student not found' });
-    }
-
-    // Remove student from batch
-    batch.students = batch.students.filter(id => id.toString() !== studentId);
-    await batch.save();
-
-    // Remove batch from student
-    student.batches = student.batches.filter(id => id.toString() !== batchId);
-    await student.save();
-
-    // await client.del(`activeQuizzes:${batchId}:${studentId}`);
-    // console.log(`Redis cache for activeQuizzes:${batchId}:${studentId} invalidated after student left`);
-
-    res.json({ message: 'Successfully left the batch' });
-
-  } catch (error) {
-    console.error('Error in leaveBatch:', error);
-    res.status(500).json({ message: 'Failed to leave the batch' });
-  }
-};
 
 
+// GET /api/student/quizzes
 
-export const getActiveQuizzesForStudent = async (req, res) => {
-  try {
-    const studentId = req.user.userId;
+// export const getStudentQuizzes = async (req, res) => {
+//   try {
+//     const student = await User.findById(req.user.id);
 
-    const student = await User.findById(studentId).populate('batches');
-    if (!student || !student.batches || student.batches.length === 0) {
-      return res.status(404).json({ message: 'No batches found' });
-    }
+//     if (!student || !student.batch) {
+//       return res.status(404).json({ message: 'Student batch not found' });
+//     }
 
-    const batchIds = student.batches.map(batch => batch._id);
-    const now = new Date();
+//     const now = new Date();
 
-    // Get all upcoming quizzes
-    const activeQuizzes = await Quiz.find({
-      batch: { $in: batchIds },
-      deadline: { $gte: now }
-    }).lean();
+//     const quizzes = await Quiz.find({ batch: student.batch }).lean();
 
-    // Get completed quiz IDs
-    const completedResults = await Result.find({ student: studentId }).select('quiz');
-    const completedQuizIds = completedResults.map(r => r.quiz.toString());
+//     // You may need to check Result collection if quiz doesn't store student submission
+//     const results = await Result.find({ student: student._id }).select('quiz').lean();
+//     const completedQuizIds = new Set(results.map(r => r.quiz.toString()));
 
-    const filteredQuizzes = activeQuizzes
-      .filter(quiz => !completedQuizIds.includes(quiz._id.toString()))
-      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+//     const enriched = quizzes.map((quiz) => {
+//       const deadline = new Date(quiz.deadline);
+//       let status = 'available';
 
+//       if (completedQuizIds.has(quiz._id.toString())) {
+//         status = 'completed';
+//       } else if (deadline < now) {
+//         status = 'overdue';
+//       }
 
-    res.json(filteredQuizzes);
+//       return {
+//         ...quiz,
+//         status,
+//         deadline,
+//       };
+//     });
 
-  } catch (err) {
-    console.error('Error in getActiveQuizzesForStudent:', err.message);
-    res.status(500).json({ error: 'Failed to fetch active quizzes' });
-  }
-};
+//     //  Custom sort:
+//     const statusPriority = { 'available': 0, 'overdue': 1, 'completed': 2 };
+
+//     const sorted = enriched.sort((a, b) => {
+//       const statusCompare = statusPriority[a.status] - statusPriority[b.status];
+//       if (statusCompare !== 0) return statusCompare;
+//       return new Date(a.deadline) - new Date(b.deadline); // earlier deadlines first
+//     });
+
+//     res.json(sorted);
+//   } catch (error) {
+//     console.error('Error in getStudentQuizzes:', error);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+

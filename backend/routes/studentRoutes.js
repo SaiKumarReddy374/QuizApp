@@ -28,16 +28,17 @@ studentRouter.get('/batches', verifyToken, requireRole('student'), getAllBatches
 studentRouter.post('/join-batch', verifyToken, requireRole('student'), joinBatch);
 studentRouter.get('/quiz/:quizId', verifyToken, getStudentQuizById);
 
-// studentRouter.get('/stats', verifyToken, requireRole('student'), getStudentStats);
-
-// ✅ This is the one your frontend is calling:
-studentRouter.get('/batch/:batchId/quizzes', verifyToken, requireRole('student'), getQuizzesByBatch);
-
-studentRouter.get('/quiz-counts', verifyToken, getStudentQuizCounts);
-
 studentRouter.delete('/leave-batch/:batchId',verifyToken,requireRole('student'),leaveBatch);
 
 studentRouter.get('/active-quizzes', verifyToken, requireRole('student'), getActiveQuizzesForStudent);
+
+// studentRouter.get('/stats', verifyToken, requireRole('student'), getStudentStats);
+
+// This is the one your frontend is calling(Dashboard page)
+studentRouter.get('/batch/:batchId/quizzes', verifyToken, requireRole('student'), getQuizzesByBatch);
+
+// studentRouter.get('/quiz-counts', verifyToken, getStudentQuizCounts);
+
 
 export default studentRouter;
 

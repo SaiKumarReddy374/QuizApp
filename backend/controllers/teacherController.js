@@ -195,6 +195,14 @@ export const createQuiz = async (req, res) => {
     // await client.del(`activeQuizzes:${batchId}`);
     // console.log(`Redis cache for activeQuizzes:${batchId} invalidated`);
 
+    // Clear student caches for this batch
+const batchQuizKeysPattern = `student:*:batch:${batchId}:quizzes`;
+const keys = await client.keys(batchQuizKeysPattern);
+if (keys.length > 0) {
+  await client.del(keys);
+  console.log(`Redis cache cleared for students in batch ${batchId}`);
+}
+
     res.status(201).json(quiz);
   } catch (err) {
     console.error('Create quiz error:', err.message);
