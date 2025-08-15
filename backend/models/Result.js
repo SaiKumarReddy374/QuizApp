@@ -43,4 +43,10 @@ const resultSchema = new mongoose.Schema({
   ]
 });
 
+// 1. Prevent duplicate submissions: unique per quiz + student
+resultSchema.index({ quiz: 1, student: 1 }, { unique: true });
+
+// 2. Fast fetching of all results for a student (student dashboard)
+resultSchema.index({ student: 1, completedAt: -1 });
+
 export default mongoose.model('Result', resultSchema);

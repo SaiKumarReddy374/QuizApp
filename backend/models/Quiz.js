@@ -17,5 +17,9 @@ const quizSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
+quizSchema.index({ createdBy: 1, createdAt: -1 }); // Teacher queries
+quizSchema.index({ batch: 1, deadline: 1 });       // Student batch queries
+
 const Quiz = mongoose.model('Quiz', quizSchema);
 export default Quiz;
+

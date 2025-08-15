@@ -6,5 +6,8 @@ const batchSchema = new mongoose.Schema({
   students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
+
+batchSchema.index({ students: 1 });
+
 const Batch = mongoose.model('Batch', batchSchema);
 export default Batch;

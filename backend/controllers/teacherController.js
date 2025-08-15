@@ -37,7 +37,7 @@ export const getLeaderboard = async (req, res) => {
 
     if (quizzes.length === 0) {
       const emptyResponse = { leaderboard: [], quizOptions: [], batchOptions: [] };
-      await client.setEx(cacheKey, 300, JSON.stringify(emptyResponse)); // cache empty for 5 mins
+      await client.setEx(cacheKey, 300, JSON.stringify(emptyResponse));
       return res.json(emptyResponse);
     }
 
