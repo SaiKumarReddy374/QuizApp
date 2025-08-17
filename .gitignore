@@ -17,5 +17,4 @@ build/
 .vscode/
 .idea/
 
-#Docker files
-docker-compose.yml
+

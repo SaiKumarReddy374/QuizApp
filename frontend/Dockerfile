@@ -11,20 +11,19 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# Stage 2: Serve with Node.js
+FROM node:18-alpine
 
-# Remove default Nginx static files
-RUN rm -rf /usr/share/nginx/html/*
+WORKDIR /app
 
-# Copy build output to Nginx HTML folder
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy only the built files
+COPY --from=build /app/dist ./dist
 
-# Copy a custom Nginx config (optional)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Install a simple static server
+RUN npm install -g serve
 
-# Expose port 80
-EXPOSE 80
+# Expose port 3000
+EXPOSE 3000
 
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Run the static server
+CMD ["serve", "-s", "dist", "-l", "3000"]
